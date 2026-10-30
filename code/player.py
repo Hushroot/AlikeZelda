@@ -41,9 +41,23 @@ class Player(Entity):
             'magic': 4,
             'speed': 5
         }
+        self.max_stats = {
+            'health': 300,
+            'energy': 140,
+            'attack': 20,
+            'magic': 10,
+            'speed': 10
+        }
+        self.upgrade_cost = {
+            'health': 100,
+            'energy': 100,
+            'attack': 100,
+            'magic': 100,
+            'speed': 100
+        }
         self.health = self.stats['health'] * 0.5
         self.energy = self.stats['energy'] * 0.8
-        self.exp = 123
+        self.exp = 0
 
         self.create_magic = create_magic
 
@@ -162,6 +176,11 @@ class Player(Entity):
         self.image = animation[int(self.frame_index)]
         self.rect = self.image.get_rect(center=self.hitbox.center)
 
+        if not self.vulnerable:
+            self.image.set_alpha(self.wave_value())
+        else:
+            self.image.set_alpha(255)
+
     def cooldowns(self):
         current_time = pygame.time.get_ticks()
 
@@ -188,12 +207,31 @@ class Player(Entity):
 
         return base_damage + weapon_damage
 
+    def get_full_magic_damage(self, style):
+        base_damage = self.stats['magic']
+        spell_damage = magic_data[style]['strength']
+
+        return base_damage + spell_damage
+
+    def energy_recovery(self):
+        self.energy = min(
+            self.stats['energy'],
+            self.energy + 0.01 * self.stats['magic']
+        )
+
+    def get_value_by_index(self, index):
+        return list(self.stats.values())[index]
+
+    def get_cost_by_index(self, index):
+        return list(self.upgrade_cost.values())[index]
+
     def update(self):
         self.input()
         self.cooldowns()
         self.get_status()
         self.animate()
         self.move(self.speed)
+        self.energy_recovery()
 
 class YSortCameraGroup(pygame.sprite.Group):
     def __init__(self):

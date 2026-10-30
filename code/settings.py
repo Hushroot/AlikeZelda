@@ -78,3 +78,8 @@ monster_data = {
         'notice_radius': 360
     }
 }
+
+TEXT_COLOR_SELECTED = '#111111'
+BAR_COLOR = '#EEEEEE'
+BAR_COLOR_SELECTED = '#111111'
+UPGRADE_BG_COLOR_SELECTED = '#EEEEEE'
