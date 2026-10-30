@@ -1,21 +1,19 @@
 import pygame
-from settings import TILESIZE, weapon_data
+from settings import TILESIZE, weapon_data, magic_data
 from support import import_folder
+from entity import Entity
 
-class Player(pygame.sprite.Sprite):
-    def __init__(self, pos, groups, obstacle_sprites, create_attack, destroy_attack):
+class Player(Entity):
+    def __init__(self, pos, groups, obstacle_sprites, create_attack, destroy_attack, create_magic):
         super().__init__(groups)
 
         self.import_player_assets()
         self.status = 'down'
-        self.frame_index = 0
-        self.animation_speed = 0.15
 
         self.image = self.animations['down_idle'][0]
         self.rect = self.image.get_rect(topleft=pos)
         self.hitbox = self.rect.inflate(0, -26)
 
-        self.direction = pygame.math.Vector2()
         self.speed = 5
         self.attacking = False
         self.attack_cooldown = 400
@@ -31,6 +29,11 @@ class Player(pygame.sprite.Sprite):
         self.weapon_switch_time = None
         self.switch_duration_cooldown = 200
 
+        self.magic_index = 0
+        self.magic = list(magic_data.keys())[self.magic_index]
+        self.can_switch_magic = True
+        self.magic_switch_time = None
+
         self.stats = {
             'health': 100,
             'energy': 60,
@@ -41,6 +44,12 @@ class Player(pygame.sprite.Sprite):
         self.health = self.stats['health'] * 0.5
         self.energy = self.stats['energy'] * 0.8
         self.exp = 123
+
+        self.create_magic = create_magic
+
+        self.vulnerable = True
+        self.hurt_time = None
+        self.invulneravility_duration = 500
 
     def import_player_assets(self):
         character_path = 'graphics/player/'
@@ -103,34 +112,26 @@ class Player(pygame.sprite.Sprite):
 
                 self.weapon = list(weapon_data.keys())[self.weapon_index]
 
-    def move(self, speed):
-        if self.direction.magnitude() != 0:
-            self.direction = self.direction.normalize()
+            if keys[pygame.K_e] and self.can_switch_magic:
+                self.can_switch_magic = False
+                self.magic_switch_time = pygame.time.get_ticks()
 
-        self.hitbox.x += self.direction.x * speed
-        self.collision('horizontal')
+                if self.magic_index < len(list(magic_data.keys())) -1:
+                    self.magic_index += 1
+                else:
+                    self.magic_index = 0
 
-        self.hitbox.y += self.direction.y * speed
-        self.collision('vertical')
+                self.magic = list(magic_data.keys())[self.magic_index]
 
-        self.rect.center = self.hitbox.center
+            if keys[pygame.K_LCTRL]:
+                self.attacking = True
+                self.attack_time = pygame.time.get_ticks()
 
-    def collision(self, direction):
-        if direction == 'horizontal':
-            for sprite in self.obstacle_sprites:
-                if sprite.hitbox.colliderect(self.hitbox):
-                    if self.direction.x > 0:
-                        self.hitbox.right = sprite.hitbox.left
-                    if self.direction.x < 0:
-                        self.hitbox.left = sprite.hitbox.right
+                style = list(magic_data.keys())[self.magic_index]
+                strength = (list(magic_data.values())[self.magic_index]['strength'] + self.stats['magic'])
+                cost = list(magic_data.values())[self.magic_index]['cost']
 
-        if direction == 'vertical':
-            for sprite in self.obstacle_sprites:
-                if sprite.hitbox.colliderect(self.hitbox):
-                    if self.direction.y > 0:
-                        self.hitbox.bottom = sprite.hitbox.top
-                    if self.direction.y < 0:
-                        self.hitbox.top = sprite.hitbox.bottom
+                self.create_magic(style, strength, cost)
 
     def get_status(self):
         if self.direction.x == 0 and self.direction.y == 0:
@@ -173,6 +174,20 @@ class Player(pygame.sprite.Sprite):
             if current_time - self.weapon_switch_time >= self.switch_duration_cooldown:
                 self.can_switch_weapon = True
 
+        if not self.can_switch_magic:
+            if current_time - self.magic_switch_time >= self.switch_duration_cooldown:
+                self.can_switch_magic = True
+
+        if not self.vulnerable:
+            if current_time - self.hurt_time >= self.invulneravility_duration:
+                self.vulnerable = True
+
+    def get_full_weapon_damage(self):
+        base_damage = self.stats['attack']
+        weapon_damage = weapon_data[self.weapon]['damage']
+
+        return base_damage + weapon_damage
+
     def update(self):
         self.input()
         self.cooldowns()
@@ -199,3 +214,12 @@ class YSortCameraGroup(pygame.sprite.Group):
         ):
             offset_pos = sprite.rect.topleft - self.offset
             self.display_surface.blit(sprite.image, offset_pos)
+
+    def enemy_update(self, player):
+        enemy_sprites = [
+            sprite for sprite in self.sprites()
+            if hasattr(sprite, 'sprite_type')
+            and sprite.sprite_type == 'enemy'
+        ]
+        for enemy in enemy_sprites:
+            enemy.enemy_update(player)
