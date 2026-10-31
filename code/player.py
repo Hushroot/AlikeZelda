@@ -115,7 +115,7 @@ class Player(Entity):
                 self.attack_time = pygame.time.get_ticks()
                 self.create_attack()
 
-            if keys[pygame.K_q] and self.can_switch_weapon:
+            if keys[pygame.K_q] and self.can_switch_weapon and not self.attacking:
                 self.can_switch_weapon = False
                 self.weapon_switch_time = pygame.time.get_ticks()
 
@@ -126,7 +126,7 @@ class Player(Entity):
 
                 self.weapon = list(weapon_data.keys())[self.weapon_index]
 
-            if keys[pygame.K_e] and self.can_switch_magic:
+            if keys[pygame.K_e] and self.can_switch_magic and not self.attacking:
                 self.can_switch_magic = False
                 self.magic_switch_time = pygame.time.get_ticks()
 
@@ -137,15 +137,19 @@ class Player(Entity):
 
                 self.magic = list(magic_data.keys())[self.magic_index]
 
-            if keys[pygame.K_LCTRL]:
-                self.attacking = True
-                self.attack_time = pygame.time.get_ticks()
+            if keys[pygame.K_LCTRL] and not self.attacking:
+                style = self.magic
+                strength = magic_data[style]['strength'] + self.stats['magic']
+                cost = magic_data[style]['cost']
+                can_cast = self.energy >= cost
 
-                style = list(magic_data.keys())[self.magic_index]
-                strength = (list(magic_data.values())[self.magic_index]['strength'] + self.stats['magic'])
-                cost = list(magic_data.values())[self.magic_index]['cost']
+                if style == 'heal' and self.health >= self.stats['health']:
+                    can_cast = False
 
-                self.create_magic(style, strength, cost)
+                if can_cast:
+                    self.attacking = True
+                    self.attack_time = pygame.time.get_ticks()
+                    self.create_magic(style, strength, cost)
 
     def get_status(self):
         if self.direction.x == 0 and self.direction.y == 0:
@@ -230,7 +234,7 @@ class Player(Entity):
         self.cooldowns()
         self.get_status()
         self.animate()
-        self.move(self.speed)
+        self.move(self.stats['speed'])
         self.energy_recovery()
 
 class YSortCameraGroup(pygame.sprite.Group):
@@ -242,13 +246,30 @@ class YSortCameraGroup(pygame.sprite.Group):
         self.half_height = self.display_surface.get_height() // 2
         self.offset = pygame.math.Vector2()
 
+        self.floor_sprites = pygame.sprite.Group()
+
+        self.grass_surface = pygame.image.load('graphics/environment/grass.png').convert()
+        self.grass_surface = pygame.transform.scale(self.grass_surface, (TILESIZE, TILESIZE))
+
     def custom_draw(self, player):
         self.offset.x = player.rect.centerx - self.half_width
         self.offset.y = player.rect.centery - self.half_height
 
+        start_x = -int(self.offset.x % TILESIZE)
+        start_y = -int(self.offset.y % TILESIZE)
+
+        for y in range(start_y, self.display_surface.get_height(), TILESIZE):
+            for x in range(start_x, self.display_surface.get_width(), TILESIZE):
+                self.display_surface.blit(self.grass_surface, (x, y))
+
+        for sprite in self.floor_sprites:
+            offset_pos = sprite.rect.topleft - self.offset
+
+            self.display_surface.blit(sprite.image, offset_pos)
+
         for sprite in sorted(
             self.sprites(),
-            key=lambda sprite: sprite.rect.centery
+            key=lambda sprite: getattr(sprite, 'sort_y', sprite.rect.centery)
         ):
             offset_pos = sprite.rect.topleft - self.offset
             self.display_surface.blit(sprite.image, offset_pos)

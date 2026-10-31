@@ -19,6 +19,32 @@ class Upgrade:
         self.selection_time = None
         self.can_move = True
 
+    def input(self):
+        keys = pygame.key.get_pressed()
+
+        if self.can_move:
+            if keys[pygame.K_RIGHT] and self.selection_index < self.attribute_nr - 1:
+                self.selection_index += 1
+                self.can_move = False
+                self.selection_time = pygame.time.get_ticks()
+            elif keys[pygame.K_LEFT] and self.selection_index > 0:
+                self.selection_index -= 1
+                self.can_move = False
+                self.selection_time = pygame.time.get_ticks()
+
+            if keys[pygame.K_SPACE]:
+                self.can_move = False
+                self.selection_time = pygame.time.get_ticks()
+
+                self.item_list[self.selection_index].trigger(self.player)
+
+    def selection_cooldown(self):
+        if not self.can_move:
+            current_time = pygame.time.get_ticks()
+
+            if current_time - self.selection_time >= 300:
+                self.can_move = True
+
     def create_items(self):
         self.item_list = []
 
@@ -34,6 +60,9 @@ class Upgrade:
             self.item_list.append(item)
 
     def display(self):
+        self.input()
+        self.selection_cooldown()
+
         for index, item in enumerate(self.item_list):
             name = self.attribute_names[index]
             value = self.player.get_value_by_index(index)
@@ -83,6 +112,20 @@ class Item:
 
         pygame.draw.line(surface, color, top, bottom, 5)
         pygame.draw.rect(surface, color, value_rect)
+
+    def trigger(self, player):
+        upgrade_attribute = list(player.stats.keys())[self.index]
+
+        if (
+            player.exp >= player.upgrade_cost[upgrade_attribute]
+            and player.stats[upgrade_attribute] < player.max_stats[upgrade_attribute]
+        ):
+            player.exp -= player.upgrade_cost[upgrade_attribute]
+            player.stats[upgrade_attribute] *= 1.2
+            player.upgrade_cost[upgrade_attribute] = round(player.upgrade_cost[upgrade_attribute] * 1.4)
+
+            if player.stats[upgrade_attribute] > player.max_stats[upgrade_attribute]:
+                player.stats[upgrade_attribute] = player.max_stats[upgrade_attribute]
 
     def display(self, surface, selection_num, name, value, max_value, cost):
         selected = self.index == selection_num

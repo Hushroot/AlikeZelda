@@ -9,6 +9,9 @@ from enemy import Enemy
 from particles import AnimationPlayer
 from magic import MagicPlayer
 from upgrade import Upgrade
+from tree import Tree
+from cottage import Cottage
+from fence import Fence
 
 class Level:
     def __init__(self):
@@ -36,10 +39,23 @@ class Level:
 
     def create_map(self):
         layout = import_csv_layout('map/world.csv')
+
+        dirt_surface = pygame.image.load('graphics/environment/dirt.png').convert()
+        tree_surface = pygame.image.load('graphics/environment/tree.png').convert_alpha()
+        cottage_surface = pygame.image.load('graphics/environment/cottage.png').convert_alpha()
+        fence_surface = pygame.image.load('graphics/environment/fence.png').convert_alpha()
+
         for row_index, row in enumerate(layout):
             for col_index, col in enumerate(row):
                 x = col_index * TILESIZE
                 y = row_index * TILESIZE
+
+                if col in ('d', 'p', 's'):
+                    Tile(
+                        (x, y),
+                        [self.visible_sprites.floor_sprites],
+                        dirt_surface
+                    )
 
                 if col == 'x':
                     Tile(
@@ -65,6 +81,58 @@ class Level:
                         self.trigger_death_particles,
                         self.add_exp
                     )
+
+        tree_positions = [
+            (3, 2), (7, 3), (15, 3), (19, 6), (5, 8), (20, 10), (4, 13), (15, 14)
+        ]
+
+        for col, row in tree_positions:
+            Tree(
+                (col * TILESIZE, row * TILESIZE),
+                [self.visible_sprites, self.obstacle_sprites],
+                tree_surface
+            )
+
+        cottage_positions = [
+            (5, 3), (18, 10)
+        ]
+
+        for col, row in cottage_positions:
+            Cottage(
+                (col * TILESIZE, row * TILESIZE),
+                [self.visible_sprites, self.obstacle_sprites],
+                cottage_surface
+            )
+
+        decoration_positions = {
+            'bush': [
+                (3, 3), (7, 5), (13, 6), (6, 10), (17, 12), (21, 13)
+            ],
+            'flowers': [
+                (2, 4), (6, 5), (9, 3), (10, 6), (7, 9), (12, 12), (18, 12), (20, 14)
+            ]
+        }
+
+        for style, positions in decoration_positions.items():
+            surface = pygame.image.load(f'graphics/environment/{style}.png').convert_alpha()
+
+            for col, row in positions:
+                Tile(
+                    (col * TILESIZE, row * TILESIZE),
+                    [self.visible_sprites.floor_sprites],
+                    surface
+                )
+
+        fence_positions = [
+            (3, 5), (7, 5), (16, 12), (20, 12)
+        ]
+
+        for col, row in fence_positions:
+            Fence(
+                (col * TILESIZE, row * TILESIZE),
+                [self.visible_sprites, self.obstacle_sprites],
+                fence_surface
+            )
 
     def create_attack(self):
         self.current_attack = Weapon(
