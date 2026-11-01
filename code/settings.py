@@ -83,3 +83,9 @@ TEXT_COLOR_SELECTED = '#111111'
 BAR_COLOR = '#EEEEEE'
 BAR_COLOR_SELECTED = '#111111'
 UPGRADE_BG_COLOR_SELECTED = '#EEEEEE'
+
+rarity_data = {
+    'common': {'weight': 70, 'multiplier': 1, 'color': '#b8b8b8'},
+    'rare': {'weight': 25, 'multiplier': 1.5, 'color': '#5599ff'},
+    'epic': {'weight': 5, 'multiplier': 2, 'color': '#bb66ff'}
+}

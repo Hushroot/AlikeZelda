@@ -1,5 +1,5 @@
 import pygame
-from settings import WORLD_MAP, TILESIZE
+from settings import WORLD_MAP, TILESIZE, weapon_data, rarity_data
 from tile import Tile
 from player import Player, YSortCameraGroup
 from support import import_csv_layout
@@ -12,6 +12,8 @@ from upgrade import Upgrade
 from tree import Tree
 from cottage import Cottage
 from fence import Fence
+from chest import Chest
+from random import choice, choices
 
 class Level:
     def __init__(self):
@@ -22,6 +24,7 @@ class Level:
 
         self.visible_sprites = YSortCameraGroup()
         self.obstacle_sprites = pygame.sprite.Group()
+        self.interaction_sprites = pygame.sprite.Group()
 
         self.current_attack = None
 
@@ -134,6 +137,15 @@ class Level:
                 fence_surface
             )
 
+        Chest(
+            (21 * TILESIZE, 13 * TILESIZE),
+            [
+                self.visible_sprites,
+                self.obstacle_sprites,
+                self.interaction_sprites
+            ]
+        )
+
     def create_attack(self):
         self.current_attack = Weapon(
             self.player,
@@ -197,12 +209,55 @@ class Level:
     def add_exp(self, amount):
         self.player.exp += amount
 
+    def get_interaction_target(self):
+        if self.game_paused or self.player.attacking:
+            return None
+
+        player_pos = pygame.math.Vector2(self.player.hitbox.center)
+        target = None
+        closest_distance = TILESIZE * 1.5
+
+        for sprite in self.interaction_sprites:
+            if not sprite.get_interaction_text():
+                continue
+
+            distance = player_pos.distance_to(sprite.hitbox.center)
+
+            if distance <= closest_distance:
+                target = sprite
+                closest_distance = distance
+
+        return target
+
+    def open_chest(self):
+        chest = self.get_interaction_target()
+
+        if chest is None or not chest.open():
+            return
+
+        weapon = choice(list(weapon_data.keys()))
+        rarities = list(rarity_data.keys())
+        weights = [rarity_data[rarity]['weight'] for rarity in rarities]
+        rarity = choices(rarities, weights=weights, k=1)[0]
+        collected = self.player.collect_weapon(weapon, rarity)
+
+        self.ui.show_loot(weapon, rarity, collected)
+
     def toggle_menu(self):
         self.game_paused = not self.game_paused
 
     def run(self):
         self.visible_sprites.custom_draw(self.player)
         self.ui.display(self.player)
+
+        target = self.get_interaction_target()
+
+        if target is not None:
+            pos = pygame.math.Vector2(target.rect.midtop)
+            pos -= self.visible_sprites.offset
+            pos.y -= 12
+
+            self.ui.show_interaction(target.get_interaction_text(), pos)
 
         if self.game_paused:
             self.upgrade.display()

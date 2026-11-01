@@ -1,5 +1,5 @@
 import pygame
-from settings import TILESIZE, weapon_data, magic_data
+from settings import TILESIZE, weapon_data, magic_data, rarity_data
 from support import import_folder
 from entity import Entity
 
@@ -24,6 +24,7 @@ class Player(Entity):
         self.destroy_attack = destroy_attack
         self.weapon_index = 0
         self.weapon = list(weapon_data.keys())[self.weapon_index]
+        self.inventory = {'sword': 'common'}
 
         self.can_switch_weapon = True
         self.weapon_switch_time = None
@@ -119,12 +120,12 @@ class Player(Entity):
                 self.can_switch_weapon = False
                 self.weapon_switch_time = pygame.time.get_ticks()
 
-                if self.weapon_index < len(list(weapon_data.keys())) - 1:
-                    self.weapon_index += 1
-                else:
-                    self.weapon_index = 0
+                weapons = list(self.inventory.keys())
+                current_index = weapons.index(self.weapon)
+                next_index = (current_index + 1) % len(weapons)
 
-                self.weapon = list(weapon_data.keys())[self.weapon_index]
+                self.weapon = weapons[next_index]
+                self.weapon_index = list(weapon_data.keys()).index(self.weapon)
 
             if keys[pygame.K_e] and self.can_switch_magic and not self.attacking:
                 self.can_switch_magic = False
@@ -205,11 +206,26 @@ class Player(Entity):
             if current_time - self.hurt_time >= self.invulneravility_duration:
                 self.vulnerable = True
 
+    def collect_weapon(self, weapon, rarity):
+        if weapon in self.inventory:
+            current_rarity = self.inventory[weapon]
+            current_multiplier = rarity_data[current_rarity]['multiplier']
+
+            if rarity_data[rarity]['multiplier'] <= current_multiplier:
+                return False
+
+        self.inventory[weapon] = rarity
+        self.weapon = weapon
+        self.weapon_index = list(weapon_data.keys()).index(weapon)
+        return True
+
     def get_full_weapon_damage(self):
         base_damage = self.stats['attack']
         weapon_damage = weapon_data[self.weapon]['damage']
+        rarity = self.inventory[self.weapon]
+        multiplier = rarity_data[rarity]['multiplier']
 
-        return base_damage + weapon_damage
+        return base_damage + weapon_damage * multiplier
 
     def get_full_magic_damage(self, style):
         base_damage = self.stats['magic']

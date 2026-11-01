@@ -14,6 +14,11 @@ class UI:
 
         self.weapon_graphics = []
 
+        self.loot_message = ''
+        self.loot_color = TEXT_COLOR
+        self.loot_time = 0
+        self.loot_duration = 3000
+
         for weapon in weapon_data.values():
             path = weapon['graphic']
             weapon = pygame.image.load(path).convert_alpha()
@@ -24,6 +29,44 @@ class UI:
         for magic in magic_data.values():
             magic = pygame.image.load(magic['graphic']).convert_alpha()
             self.magic_graphics.append(magic)
+
+    def show_interaction(self, text, pos):
+        text_surf = self.font.render(text, False, TEXT_COLOR)
+        text_rect = text_surf.get_rect(midbottom=pos)
+        background_rect = text_rect.inflate(20, 12)
+
+        pygame.draw.rect(self.display_surface, UI_BG_COLOR, background_rect)
+        pygame.draw.rect(self.display_surface, UI_BORDER_COLOR_ACTIVE, background_rect, 2)
+
+        self.display_surface.blit(text_surf, text_rect)
+
+    def show_loot(self, weapon, rarity, collected):
+        name = f'{rarity.title()}{weapon.title()}'
+
+        if collected:
+            self.loot_message = f'Found: {name}'
+        else:
+            self.loot_message = f'{name} - kept your weapon'
+
+        self.loot_color = rarity_data[rarity]['color']
+        self.loot_time = pygame.time.get_ticks()
+
+    def draw_loot(self):
+        if not self.loot_message:
+            return
+
+        if pygame.time.get_ticks() - self.loot_time >= self.loot_duration:
+            return
+
+        text_surf = self.font.render(self.loot_message, False, self.loot_color)
+        text_rect = text_surf.get_rect(midtop=(
+            self.display_surface.get_width() // 2, 70
+        ))
+        background_rect = text_rect.inflate(24, 16)
+
+        pygame.draw.rect(self.display_surface, UI_BG_COLOR, background_rect)
+        pygame.draw.rect(self.display_surface, self.loot_color, background_rect, 2)
+        self.display_surface.blit(text_surf, text_rect)
 
     def show_bar(self, current, max_amount, bg_rect, color):
         pygame.draw.rect(self.display_surface,  UI_BG_COLOR, bg_rect)
@@ -100,3 +143,4 @@ class UI:
             player.magic_index,
             not player.can_switch_magic
         )
+        self.draw_loot()
