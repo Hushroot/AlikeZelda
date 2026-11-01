@@ -22,13 +22,13 @@ class Game:
                     sys.exit()
 
                 if event.type == pygame.KEYDOWN:
-                    if self.level.game_over:
+                    if self.level.game_over or self.level.game_won:
                         if event.key == pygame.K_r:
                             self.level = Level()
                     elif event.key == pygame.K_m:
                         self.level.toggle_menu()
                     elif event.key == pygame.K_f:
-                        self.level.open_chest()
+                        self.level.interact()
 
             self.screen.fill('black')
             self.level.run()

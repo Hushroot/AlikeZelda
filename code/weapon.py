@@ -5,6 +5,8 @@ class Weapon(pygame.sprite.Sprite):
         super().__init__(groups)
         self.sprite_type = 'weapon'
 
+        self.hit_targets = set()
+
         direction = player.status.split('_')[0]
         full_path = f'graphics/weapons/{player.weapon}/{direction}.png'
         self.image = pygame.image.load(full_path).convert_alpha()
@@ -25,4 +27,4 @@ class Weapon(pygame.sprite.Sprite):
             self.rect = self.image.get_rect(
                 midbottom=player.rect.midtop + pygame.math.Vector2(-10, 0)
             )
-            
+

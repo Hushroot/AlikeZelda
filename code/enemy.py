@@ -15,7 +15,7 @@ class Enemy(Entity):
         self.rect = self.image.get_rect(topleft=pos)
         self.hitbox = self.rect.inflate(0, -10)
         self.obstacle_sprites = obstacle_sprites
-        
+
         self.monster_name = monster_name
         monster_info = monster_data[self.monster_name]
 
@@ -39,6 +39,8 @@ class Enemy(Entity):
         self.vulnerable = True
         self.hit_time = None
         self.invincibility_duration = 300
+
+        self.knockback_duration = 100
 
         self.knockback_direction = pygame.math.Vector2()
 
@@ -140,7 +142,10 @@ class Enemy(Entity):
 
     def hit_reaction(self):
         if not self.vulnerable:
-            self.direction = self.knockback_direction.copy()
+            elapsed = pygame.time.get_ticks() - self.hit_time
+
+            if elapsed < self.knockback_duration:
+                self.direction = self.knockback_direction.copy()
 
     def update(self):
         self.hit_reaction()

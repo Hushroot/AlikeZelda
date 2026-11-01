@@ -104,6 +104,8 @@ class Reflection(Entity):
         if self.time < self.attack_queue[0]['time']:
             return
 
+        self.follow_player()
+
         attack = self.attack_queue.pop(0)
         self.status = self.status.split('_')[0] + '_attack'
         self.frame_index = 0
@@ -120,18 +122,23 @@ class Reflection(Entity):
         player_pos = pygame.math.Vector2(self.player.hitbox.center)
         reflection_pos = pygame.math.Vector2(self.hitbox.center)
         offset = player_pos - reflection_pos
+        distance = offset.magnitude()
 
-        if offset.magnitude() <= self.stop_distance:
+        if distance == 0:
             self.direction = pygame.math.Vector2()
             self.status = self.status.split('_')[0] + '_idle'
             return
 
-        self.direction = offset.normalize()
-
-        if abs(self.direction.x) > abs(self.direction.y):
-            self.status = 'right' if self.direction.x > 0 else 'left'
+        if abs(offset.x) > abs(offset.y):
+            self.status = 'right' if offset.x > 0 else 'left'
         else:
-            self.status = 'down' if self.direction.y > 0 else 'up'
+            self.status = 'down' if offset.y > 0 else 'up'
+
+        if distance <= self.stop_distance:
+            self.direction = pygame.math.Vector2()
+            self.status+= '_idle'
+        else:
+            self.direction = offset.normalize()
 
     def animate(self):
         animation = self.animations[self.status]

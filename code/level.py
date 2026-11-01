@@ -15,6 +15,7 @@ from fence import Fence
 from chest import Chest
 from random import choice, choices
 from reflection import Reflection
+from exit_gate import ExitGate
 
 class Level:
     def __init__(self):
@@ -24,6 +25,8 @@ class Level:
         self.game_paused = False
 
         self.game_over = False
+
+        self.game_won = False
 
         self.visible_sprites = YSortCameraGroup()
         self.obstacle_sprites = pygame.sprite.Group()
@@ -47,33 +50,44 @@ class Level:
         self.magic_player = MagicPlayer(self.animation_player)
 
     def create_map(self):
-        layout = import_csv_layout('map/world.csv')
+        layout = import_csv_layout('map/expanded_world.csv')
 
-        dirt_surface = pygame.image.load('graphics/environment/dirt.png').convert()
-        tree_surface = pygame.image.load('graphics/environment/tree.png').convert_alpha()
-        cottage_surface = pygame.image.load('graphics/environment/cottage.png').convert_alpha()
-        fence_surface = pygame.image.load('graphics/environment/fence.png').convert_alpha()
+        graphics = {
+            'd': 'graphics/environment/dirt.png',
+            'x': 'graphics/test/rock.png',
+            't': 'graphics/environment/tree.png',
+            'h': 'graphics/environment/cottage.png',
+            'f': 'graphics/environment/fence.png',
+            'b': 'graphics/environment/bush.png',
+            'v': 'graphics/environment/flowers.png'
+        }
+        surfaces = {}
+
+        for code, path in graphics.items():
+            surfaces[code] = pygame.image.load(path).convert_alpha()
+
+        prop_types = {'t': Tree, 'h': Cottage, 'f': Fence}
 
         for row_index, row in enumerate(layout):
             for col_index, col in enumerate(row):
-                x = col_index * TILESIZE
-                y = row_index * TILESIZE
+                pos = (col_index * TILESIZE, row_index * TILESIZE)
 
-                if col in ('d', 'p', 's'):
+                if col in ('d', 'p', 's', 'c', 'r', 'g'):
                     Tile(
-                        (x, y),
+                        pos,
                         [self.visible_sprites.floor_sprites],
-                        dirt_surface
+                        surfaces['d']
                     )
 
                 if col == 'x':
                     Tile(
-                        (x, y),
-                        [self.visible_sprites, self.obstacle_sprites]
+                        pos,
+                        [self.visible_sprites, self.obstacle_sprites],
+                        surfaces['x']
                     )
                 elif col == 'p':
                     self.player = Player(
-                        (x, y),
+                        pos,
                         [self.visible_sprites],
                         self.obstacle_sprites,
                         self.create_attack,
@@ -83,75 +97,37 @@ class Level:
                 elif col == 's':
                     Enemy(
                         'squid',
-                        (x, y),
+                        pos,
                         [self.visible_sprites, self.attackable_sprites],
                         self.obstacle_sprites,
                         self.damage_player,
                         self.trigger_death_particles,
                         self.add_exp
                     )
-
-        tree_positions = [
-            (3, 2), (7, 3), (15, 3), (19, 6), (5, 8), (20, 10), (4, 13), (15, 14)
-        ]
-
-        for col, row in tree_positions:
-            Tree(
-                (col * TILESIZE, row * TILESIZE),
-                [self.visible_sprites, self.obstacle_sprites],
-                tree_surface
-            )
-
-        cottage_positions = [
-            (5, 3), (18, 10)
-        ]
-
-        for col, row in cottage_positions:
-            Cottage(
-                (col * TILESIZE, row * TILESIZE),
-                [self.visible_sprites, self.obstacle_sprites],
-                cottage_surface
-            )
-
-        decoration_positions = {
-            'bush': [
-                (3, 3), (7, 5), (13, 6), (6, 10), (17, 12), (21, 13)
-            ],
-            'flowers': [
-                (2, 4), (6, 5), (9, 3), (10, 6), (7, 9), (12, 12), (18, 12), (20, 14)
-            ]
-        }
-
-        for style, positions in decoration_positions.items():
-            surface = pygame.image.load(f'graphics/environment/{style}.png').convert_alpha()
-
-            for col, row in positions:
-                Tile(
-                    (col * TILESIZE, row * TILESIZE),
-                    [self.visible_sprites.floor_sprites],
-                    surface
-                )
-
-        fence_positions = [
-            (3, 5), (7, 5), (16, 12), (20, 12)
-        ]
-
-        for col, row in fence_positions:
-            Fence(
-                (col * TILESIZE, row * TILESIZE),
-                [self.visible_sprites, self.obstacle_sprites],
-                fence_surface
-            )
-
-        Chest(
-            (21 * TILESIZE, 13 * TILESIZE),
-            [
-                self.visible_sprites,
-                self.obstacle_sprites,
-                self.interaction_sprites
-            ],
-            cursed=True
-        )
+                elif col in prop_types:
+                    prop_types[col](
+                        pos,
+                        [self.visible_sprites, self.obstacle_sprites],
+                        surfaces[col]
+                    )
+                elif col in ('b', 'v'):
+                    Tile(
+                        pos,
+                        [self.visible_sprites.floor_sprites],
+                        surfaces[col]
+                    )
+                elif col == 'g':
+                    ExitGate(
+                        pos,
+                        [self.visible_sprites, self.obstacle_sprites, self.interaction_sprites],
+                        self.get_cursed_chest_progress
+                    )
+                elif col in ('c', 'r'):
+                    Chest(
+                        pos,
+                        [self.visible_sprites, self.obstacle_sprites, self.interaction_sprites],
+                        cursed=col == 'r'
+                    )
 
     def create_attack(self):
         self.current_attack = Weapon(
@@ -219,6 +195,12 @@ class Level:
                     False
                 )
                 for target_sprite in collision_sprites:
+                    if attack_sprite.sprite_type == 'weapon':
+                        if target_sprite in attack_sprite.hit_targets or not target_sprite.vulnerable:
+                            continue
+
+                        attack_sprite.hit_targets.add(target_sprite)
+
                     target_sprite.get_damage(
                         self.player,
                         attack_sprite.sprite_type
@@ -238,7 +220,7 @@ class Level:
                 self.damage_player(flame.damage, 'flame')
 
     def damage_player(self, amount, attack_type):
-        if self.game_over or self.game_paused:
+        if self.game_over or self.game_won or self.game_paused:
             return
 
         if self.player.vulnerable:
@@ -267,8 +249,31 @@ class Level:
     def add_exp(self, amount):
         self.player.exp += amount
 
+    def get_cursed_chest_progress(self):
+        cursed_chests = [
+            sprite for sprite in self.interaction_sprites
+            if isinstance(sprite, Chest) and sprite.cursed
+        ]
+        claimed = sum(chest.state == 'opened' for chest in cursed_chests)
+        return claimed, len(cursed_chests)
+
+    def interact(self):
+        target = self.get_interaction_target()
+
+        if target is None:
+            return
+
+        if isinstance(target, ExitGate):
+            if target.can_open():
+                self.game_won = True
+                self.destroy_attack()
+            else:
+                self.ui.show_message('Claim all cursed chest loot before escaping.')
+        else:
+            self.open_chest()
+
     def get_interaction_target(self):
-        if self.game_over or self.game_paused or self.player.attacking or self.active_chest is not None:
+        if self.game_over or self.game_won or self.game_paused or self.player.attacking or self.active_chest is not None:
             return None
 
         player_pos = pygame.math.Vector2(self.player.hitbox.center)
@@ -293,7 +298,7 @@ class Level:
 
         self.active_chest = chest
         self.reflection = Reflection(
-            (18 * TILESIZE, 13 * TILESIZE),
+            chest.reflection_pos,
             [self.visible_sprites, self.attackable_sprites],
             self.player,
             self.obstacle_sprites,
@@ -306,13 +311,16 @@ class Level:
             return
 
         self.active_chest.unlock()
+        self.ui.show_message(
+            'Reflection defeated! Return to the chest and press F for loot.', rarity_data['epic']['color']
+        )
         self.active_chest = None
         self.reflection = None
 
     def open_chest(self):
         chest = self.get_interaction_target()
 
-        if chest is None:
+        if not isinstance(chest, Chest):
             return
 
         if chest.state == 'sealed':
@@ -331,11 +339,11 @@ class Level:
         self.ui.show_loot(weapon, rarity, collected)
 
     def toggle_menu(self):
-        if not self.game_over:
+        if not self.game_over and not self.game_won:
             self.game_paused = not self.game_paused
 
     def run(self):
-        if not self.game_over and not self.game_paused:
+        if not self.game_over and not self.game_won and not self.game_paused:
             self.visible_sprites.update()
             self.visible_sprites.enemy_update(self.player)
 
@@ -349,9 +357,18 @@ class Level:
             self.reflection.last_update = pygame.time.get_ticks()
 
         self.visible_sprites.custom_draw(self.player)
+        self.ui.show_reflection_health(
+            self.reflection,
+            self.visible_sprites.offset
+        )
         self.ui.display(self.player)
 
-        if self.game_over:
+        claimed, total = self.get_cursed_chest_progress()
+        self.ui.show_objective(claimed, total)
+
+        if self.game_won:
+            self.ui.show_victory()
+        elif self.game_over:
             self.ui.show_game_over()
         elif self.game_paused:
             self.upgrade.display()

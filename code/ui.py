@@ -163,3 +163,57 @@ class UI:
         )
         hint_rect = hint.get_rect(center= (center_x, center_y + 35))
         self.display_surface.blit(hint, hint_rect)
+
+    def show_reflection_health(self, reflection, offset):
+        if reflection is None or not reflection.alive():
+            return
+
+        pos = pygame.math.Vector2(reflection.rect.midtop) - offset
+        pos.y -= 10
+
+        bar_rect = pygame.Rect(0, 0, 96, 12)
+        bar_rect.midbottom = pos
+
+        self.show_bar(
+            reflection.health,
+            reflection.max_health,
+            bar_rect,
+            rarity_data['epic']['color']
+        )
+
+    def show_message(self, text, color=TEXT_COLOR):
+        self.loot_message = text
+        self.loot_color = color
+        self.loot_time = pygame.time.get_ticks()
+
+    def show_objective(self, claimed, total):
+        if total > 0 and claimed == total:
+            text = 'All cursed loot claimed! Find the ruins exit.'
+        else:
+            text = f'Cursed chests claimed: {claimed} / {total}'
+
+        text_surf = self.font.render(text, False, TEXT_COLOR)
+        text_rect = text_surf.get_rect(midbottom=(
+            self.display_surface.get_width() // 2,
+            self.display_surface.get_height() - 20
+        ))
+        background_rect = text_rect.inflate(24, 12)
+
+        pygame.draw.rect(self.display_surface, UI_BG_COLOR, background_rect)
+        pygame.draw.rect(self.display_surface, rarity_data['epic']['color'], background_rect, 2)
+        self.display_surface.blit(text_surf, text_rect)
+
+    def show_victory(self):
+        self.display_surface.blit(self.game_over_overlay, (0, 0))
+        center_x = self.display_surface.get_width() // 2
+        center_y = self.display_surface.get_height() // 2
+
+        title = self.game_over_font.render(
+            'YOU ESCAPED', False, UI_BORDER_COLOR_ACTIVE
+        )
+        title_rect = title.get_rect(center=(center_x, center_y - 30))
+        self.display_surface.blit(title, title_rect)
+
+        hint = self.font.render('Press R to play again', False, TEXT_COLOR)
+        hint_rect = hint.get_rect(center=(center_x, center_y + 35))
+        self.display_surface.blit(hint, hint_rect)

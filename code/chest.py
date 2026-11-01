@@ -26,6 +26,8 @@ class Chest(pygame.sprite.Sprite):
         self.cursed = cursed
         self.state = 'sealed' if cursed else 'ready'
 
+        self.reflection_pos = (pos[0] - 3 * TILESIZE, pos[1])
+
     def get_interaction_text(self):
         if self.state == 'sealed':
             return 'Press F to face your reflection'
