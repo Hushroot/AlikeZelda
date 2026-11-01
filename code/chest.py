@@ -2,7 +2,7 @@ import pygame
 from settings import TILESIZE
 
 class Chest(pygame.sprite.Sprite):
-    def __init__(self, pos, groups):
+    def __init__(self, pos, groups, cursed=False):
         super().__init__(groups)
 
         self.closed_image = pygame.Surface((48, 40), pygame.SRCALPHA)
@@ -23,18 +23,34 @@ class Chest(pygame.sprite.Sprite):
         ))
 
         self.hitbox = self.rect.inflate(0, -12)
-        self.opened = False
+        self.cursed = cursed
+        self.state = 'sealed' if cursed else 'ready'
 
     def get_interaction_text(self):
-        if self.opened:
-            return ''
+        if self.state == 'sealed':
+            return 'Press F to face your reflection'
 
-        return 'Press F to open'
+        if self.state == 'ready':
+            if self.cursed:
+                return 'Press F to claim loot'
+            return 'Press F to open'
+        return ''
 
-    def open(self):
-        if self.opened:
+    def start_duel(self):
+        if self.state != 'sealed':
             return False
 
-        self.opened = True
+        self.state = 'fighting'
+        return True
+
+    def unlock(self):
+        if self.state == 'fighting':
+            self.state = 'ready'
+
+    def open(self):
+        if self.state != 'ready':
+            return False
+
+        self.state = 'opened'
         self.image = self.open_image
         return True

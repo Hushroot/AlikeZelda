@@ -14,6 +14,7 @@ from cottage import Cottage
 from fence import Fence
 from chest import Chest
 from random import choice, choices
+from reflection import Reflection
 
 class Level:
     def __init__(self):
@@ -22,11 +23,16 @@ class Level:
 
         self.game_paused = False
 
+        self.game_over = False
+
         self.visible_sprites = YSortCameraGroup()
         self.obstacle_sprites = pygame.sprite.Group()
         self.interaction_sprites = pygame.sprite.Group()
 
         self.current_attack = None
+
+        self.reflection = None
+        self.active_chest = None
 
         self.attack_sprites = pygame.sprite.Group()
         self.attackable_sprites = pygame.sprite.Group()
@@ -143,7 +149,8 @@ class Level:
                 self.visible_sprites,
                 self.obstacle_sprites,
                 self.interaction_sprites
-            ]
+            ],
+            cursed=True
         )
 
     def create_attack(self):
@@ -152,20 +159,50 @@ class Level:
             [self.visible_sprites, self.attack_sprites]
         )
 
+        if self.reflection is not None and self.reflection.alive():
+            self.reflection.queue_attack(self.player.weapon, self.player.get_full_weapon_damage())
+
     def create_magic(self, style, strength, cost):
+        cast = False
+
         if style == 'heal':
-            self.magic_player.heal(
+            cast = self.magic_player.heal(
                 self.player,
                 strength,
                 cost,
                 [self.visible_sprites]
             )
         elif style == 'flame':
-            self.magic_player.flame(
+            cast = self.magic_player.flame(
                 self.player,
                 cost,
                 [self.visible_sprites, self.attack_sprites]
             )
+
+        if cast and self.reflection is not None and self.reflection.alive():
+            self.reflection.queue_magic(style, strength)
+
+    def create_reflection_magic(self, reflection, style, strength):
+        if style == 'flame':
+            flames = self.magic_player.create_flames(
+                reflection,
+                [self.visible_sprites, reflection.magic_sprites]
+            )
+
+            for flame in flames:
+                flame.damage = strength
+        elif style == 'heal' and reflection.health < reflection.max_health:
+            reflection.health = min(
+                reflection.max_health,
+                reflection.health + strength
+            )
+
+            for particle_type in ('aura', 'heal'):
+                self.animation_player.create_particles(
+                    particle_type,
+                    reflection.rect.center,
+                    [self.visible_sprites]
+                )
 
     def destroy_attack(self):
         if self.current_attack:
@@ -187,7 +224,23 @@ class Level:
                         attack_sprite.sprite_type
                     )
 
+    def reflection_attack_logic(self):
+        if self.reflection is None or self.reflection.health <= 0:
+            return
+
+        attack = self.reflection.current_attack
+
+        if attack is not None and attack.rect.colliderect(self.player.hitbox):
+            self.damage_player(self.reflection.attack_damage, 'slash')
+
+        for flame in self.reflection.magic_sprites:
+            if flame.rect.colliderect(self.player.hitbox):
+                self.damage_player(flame.damage, 'flame')
+
     def damage_player(self, amount, attack_type):
+        if self.game_over or self.game_paused:
+            return
+
         if self.player.vulnerable:
             self.player.health = max(0, self.player.health - amount)
             self.player.vulnerable = False
@@ -197,7 +250,12 @@ class Level:
                 attack_type,
                 self.player.rect.center,
                 [self.visible_sprites]
-        )
+            )
+
+            if self.player.health <= 0:
+                self.game_over = True
+                self.game_paused = False
+                self.destroy_attack()
 
     def trigger_death_particles(self, pos, particle_type):
         self.animation_player.create_particles(
@@ -210,7 +268,7 @@ class Level:
         self.player.exp += amount
 
     def get_interaction_target(self):
-        if self.game_paused or self.player.attacking:
+        if self.game_over or self.game_paused or self.player.attacking or self.active_chest is not None:
             return None
 
         player_pos = pygame.math.Vector2(self.player.hitbox.center)
@@ -229,10 +287,39 @@ class Level:
 
         return target
 
+    def start_reflection_duel(self, chest):
+        if self.active_chest is not None or not chest.start_duel():
+            return
+
+        self.active_chest = chest
+        self.reflection = Reflection(
+            (18 * TILESIZE, 13 * TILESIZE),
+            [self.visible_sprites, self.attackable_sprites],
+            self.player,
+            self.obstacle_sprites,
+            [self.visible_sprites],
+            self.create_reflection_magic
+        )
+
+    def check_reflection_duel(self):
+        if self.active_chest is None or self.reflection.alive():
+            return
+
+        self.active_chest.unlock()
+        self.active_chest = None
+        self.reflection = None
+
     def open_chest(self):
         chest = self.get_interaction_target()
 
-        if chest is None or not chest.open():
+        if chest is None:
+            return
+
+        if chest.state == 'sealed':
+            self.start_reflection_duel(chest)
+            return
+
+        if not chest.open():
             return
 
         weapon = choice(list(weapon_data.keys()))
@@ -244,25 +331,36 @@ class Level:
         self.ui.show_loot(weapon, rarity, collected)
 
     def toggle_menu(self):
-        self.game_paused = not self.game_paused
+        if not self.game_over:
+            self.game_paused = not self.game_paused
 
     def run(self):
+        if not self.game_over and not self.game_paused:
+            self.visible_sprites.update()
+            self.visible_sprites.enemy_update(self.player)
+
+            if not self.game_over:
+                self.player_attack_logic()
+                self.reflection_attack_logic()
+
+                if not self.game_over:
+                    self.check_reflection_duel()
+        elif self.game_paused and self.reflection is not None:
+            self.reflection.last_update = pygame.time.get_ticks()
+
         self.visible_sprites.custom_draw(self.player)
         self.ui.display(self.player)
 
-        target = self.get_interaction_target()
-
-        if target is not None:
-            pos = pygame.math.Vector2(target.rect.midtop)
-            pos -= self.visible_sprites.offset
-            pos.y -= 12
-
-            self.ui.show_interaction(target.get_interaction_text(), pos)
-
-        if self.game_paused:
+        if self.game_over:
+            self.ui.show_game_over()
+        elif self.game_paused:
             self.upgrade.display()
         else:
-            self.visible_sprites.update()
+            target = self.get_interaction_target()
 
-            self.visible_sprites.enemy_update(self.player)
-            self.player_attack_logic()
+            if target is not None:
+                pos = pygame.math.Vector2(target.rect.midtop)
+                pos -= self.visible_sprites.offset
+                pos.y -= 12
+
+                self.ui.show_interaction(target.get_interaction_text(), pos)

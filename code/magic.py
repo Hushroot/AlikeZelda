@@ -16,34 +16,35 @@ class MagicPlayer:
 
             self.animation_player.create_particles('aura', player.rect.center, groups)
             self.animation_player.create_particles('heal', player.rect.center, groups)
+            return True
+        return False
 
     def flame(self, player, cost, groups):
-        if player.energy >= cost:
-            player.energy -= cost
+        if player.energy < cost:
+            return False
 
-            if player.status.split('_')[0] == 'right':
-                direction = pygame.math.Vector2(1, 0)
-            elif player.status.split('_')[0] == 'left':
-                direction = pygame.math.Vector2(-1, 0)
-            elif player.status.split('_')[0] == 'up':
-                direction = pygame.math.Vector2(0, -1)
-            else:
-                direction = pygame.math.Vector2(0, 1)
+        player.energy -= cost
+        self.create_flames(player, groups)
+        return True
 
-            for i in range(1, 6):
-                if direction.x:
-                    offset_x = direction.x * i * TILESIZE
-                    x = (
-                        player.rect.centerx + offset_x + randint(-TILESIZE // 3, TILESIZE // 3)
-                    )
-                    y = player.rect.centery + randint( -TILESIZE // 3, TILESIZE // 3)
-                else:
-                    offset_y = direction.y * i * TILESIZE
-                    x = player.rect.centerx + randint( -TILESIZE // 3, TILESIZE // 3 )
-                    y = (
-                        player.rect.centery + offset_y + randint(-TILESIZE // 3, TILESIZE // 3)
-                    )
+    def create_flames(self, caster, groups):
+        directions = {
+            'right': pygame.math.Vector2(1, 0),
+            'left': pygame.math.Vector2(-1, 0),
+            'up': pygame.math.Vector2(0, -1),
+            'down': pygame.math.Vector2(0, 1)
+        }
 
-                self.animation_player.create_particles(
-                    'flame', (x, y), groups
-                )
+        direction = directions[caster.status.split('_')[0]]
+        flames = []
+
+        for i in range(1, 6):
+            pos = pygame.math.Vector2(caster.rect.center)
+            pos += direction * i * TILESIZE
+            pos.x += randint(-TILESIZE // 3, TILESIZE // 3)
+            pos.y += randint(-TILESIZE // 3, TILESIZE // 3)
+
+            flame = self.animation_player.create_particles( 'flame', pos, groups)
+            flames.append(flame)
+
+        return flames

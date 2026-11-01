@@ -12,6 +12,10 @@ class UI:
         )
         self.font = pygame.font.Font(UI_FONT, UI_FONT_SIZE)
 
+        self.game_over_font = pygame.font.Font(UI_FONT, 48)
+        self.game_over_overlay = pygame.Surface(self.display_surface.get_size(), pygame.SRCALPHA)
+        self.game_over_overlay.fill((0, 0, 0, 180))
+
         self.weapon_graphics = []
 
         self.loot_message = ''
@@ -144,3 +148,18 @@ class UI:
             not player.can_switch_magic
         )
         self.draw_loot()
+
+    def show_game_over(self):
+        self.display_surface.blit(self.game_over_overlay, (0, 0))
+        center_x = self.display_surface.get_width() // 2
+        center_y = self.display_surface.get_height() // 2
+
+        title = self.game_over_font.render('YOU DIED', False, TEXT_COLOR)
+        title_rect = title.get_rect(center=(center_x, center_y - 30))
+        self.display_surface.blit(title, title_rect)
+
+        hint = self.font.render(
+            'Press R to restart', False, UI_BORDER_COLOR_ACTIVE
+        )
+        hint_rect = hint.get_rect(center= (center_x, center_y + 35))
+        self.display_surface.blit(hint, hint_rect)

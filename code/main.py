@@ -22,7 +22,10 @@ class Game:
                     sys.exit()
 
                 if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_m:
+                    if self.level.game_over:
+                        if event.key == pygame.K_r:
+                            self.level = Level()
+                    elif event.key == pygame.K_m:
                         self.level.toggle_menu()
                     elif event.key == pygame.K_f:
                         self.level.open_chest()
