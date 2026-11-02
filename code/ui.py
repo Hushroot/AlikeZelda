@@ -217,3 +217,33 @@ class UI:
         hint = self.font.render('Press R to play again', False, TEXT_COLOR)
         hint_rect = hint.get_rect(center=(center_x, center_y + 35))
         self.display_surface.blit(hint, hint_rect)
+
+    def show_title(self):
+        self.display_surface.blit(self.game_over_overlay, (0, 0))
+        panel = pygame.Rect(0, 0, 1080, 560)
+        panel.center = self.display_surface.get_rect().center
+        purple = rarity_data['epic']['color']
+
+        pygame.draw.rect(self.display_surface, UI_BG_COLOR, panel)
+        pygame.draw.rect(self.display_surface, purple, panel, 3)
+
+        title = self.game_over_font.render('AlikeZelda', False, purple)
+        title_rect = title.get_rect(center=(panel.centerx, panel.top + 75))
+        self.display_surface.blit(title, title_rect)
+
+        lines = [
+            ('Claim all three cursed chest rewards.', 160, TEXT_COLOR),
+            ('Escape through the gate in the ruins.', 190, TEXT_COLOR),
+            ('Reflections copy your attacks and spells.', 250, purple),
+            ('ARROWS: Move      SPACE: Attack', 330, TEXT_COLOR),
+            ('Q: Weapon     E: Spell        LEFT CTRL: Cast', 365, TEXT_COLOR),
+            ('F: Interact       M: Upgrades / Pause', 400, TEXT_COLOR),
+            ('Press ENTER to start', 490, UI_BORDER_COLOR_ACTIVE)
+        ]
+
+        for text, offset, color in lines:
+            text_surf = self.font.render(text, False, color)
+            text_rect = text_surf.get_rect(center=(
+                panel.centerx, panel.top + offset
+            ))
+            self.display_surface.blit(text_surf, text_rect)

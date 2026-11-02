@@ -1,5 +1,5 @@
 import pygame
-from settings import WORLD_MAP, TILESIZE, weapon_data, rarity_data
+from settings import WORLD_MAP, TILESIZE, weapon_data, rarity_data, treasure_data
 from tile import Tile
 from player import Player, YSortCameraGroup
 from support import import_csv_layout
@@ -16,13 +16,20 @@ from chest import Chest
 from random import choice, choices
 from reflection import Reflection
 from exit_gate import ExitGate
+from world_map import WorldMap
+from treasure import BuriedTreasure, TreasureClue
+from save_manager import SaveManager
 
 class Level:
     def __init__(self):
 
         self.display_surface = pygame.display.get_surface()
 
+        self.save_manager = SaveManager()
+
         self.game_paused = False
+
+        self.map_open = False
 
         self.game_over = False
 
@@ -42,6 +49,8 @@ class Level:
 
         self.create_map()
 
+        self.world_map.reveal(self.player.hitbox.center)
+
         self.ui = UI()
 
         self.upgrade = Upgrade(self.player)
@@ -51,6 +60,7 @@ class Level:
 
     def create_map(self):
         layout = import_csv_layout('map/expanded_world.csv')
+        self.world_map = WorldMap(layout)
 
         graphics = {
             'd': 'graphics/environment/dirt.png',
@@ -128,6 +138,23 @@ class Level:
                         [self.visible_sprites, self.obstacle_sprites, self.interaction_sprites],
                         cursed=col == 'r'
                     )
+
+        for data in treasure_data.values():
+            treasure_col, treasure_row = data['treasure_pos']
+
+            treasure = BuriedTreasure(
+                (treasure_col * TILESIZE, treasure_row * TILESIZE),
+                [self.visible_sprites.floor_sprites, self.interaction_sprites]
+            )
+
+            clue_col, clue_row = data['clue_pos']
+
+            TreasureClue(
+                (clue_col * TILESIZE, clue_row * TILESIZE),
+                [self.visible_sprites.floor_sprites, self.interaction_sprites],
+                treasure,
+                data['hint']
+            )
 
     def create_attack(self):
         self.current_attack = Weapon(
@@ -220,7 +247,7 @@ class Level:
                 self.damage_player(flame.damage, 'flame')
 
     def damage_player(self, amount, attack_type):
-        if self.game_over or self.game_won or self.game_paused:
+        if self.game_over or self.game_won or self.game_paused or self.map_open:
             return
 
         if self.player.vulnerable:
@@ -263,17 +290,30 @@ class Level:
         if target is None:
             return
 
-        if isinstance(target, ExitGate):
+        if isinstance(target, TreasureClue):
+            if target.read():
+                self.ui.show_message(target.hint)
+        elif isinstance(target, BuriedTreasure):
+            if target.open():
+                weapon = choice(list(weapon_data.keys()))
+                rarity = choices(['rare', 'epic'], weights=[80, 20], k=1)[0]
+                collected = self.player.collect_weapon(weapon, rarity)
+
+                self.add_exp(100)
+                self.ui.show_loot(weapon, rarity, collected)
+        elif isinstance(target, ExitGate):
             if target.can_open():
                 self.game_won = True
                 self.destroy_attack()
             else:
-                self.ui.show_message('Claim all cursed chest loot before escaping.')
+                self.ui.show_message(
+                    'Claim all cursed chest loot before escaping'
+                )
         else:
             self.open_chest()
 
     def get_interaction_target(self):
-        if self.game_over or self.game_won or self.game_paused or self.player.attacking or self.active_chest is not None:
+        if self.game_over or self.game_won or self.game_paused or self.map_open or self.player.attacking or self.active_chest is not None:
             return None
 
         player_pos = pygame.math.Vector2(self.player.hitbox.center)
@@ -338,12 +378,16 @@ class Level:
 
         self.ui.show_loot(weapon, rarity, collected)
 
+    def toggle_map(self):
+        if not self.game_over and not self.game_won and not self.game_paused:
+            self.map_open = not self.map_open
+
     def toggle_menu(self):
-        if not self.game_over and not self.game_won:
+        if not self.game_over and not self.game_won and not self.map_open:
             self.game_paused = not self.game_paused
 
     def run(self):
-        if not self.game_over and not self.game_won and not self.game_paused:
+        if not self.game_over and not self.game_won and not self.game_paused and not self.map_open:
             self.visible_sprites.update()
             self.visible_sprites.enemy_update(self.player)
 
@@ -353,8 +397,10 @@ class Level:
 
                 if not self.game_over:
                     self.check_reflection_duel()
-        elif self.game_paused and self.reflection is not None:
+        elif (self.game_paused or self.map_open) and self.reflection is not None:
             self.reflection.last_update = pygame.time.get_ticks()
+
+        self.world_map.reveal(self.player.hitbox.center)
 
         self.visible_sprites.custom_draw(self.player)
         self.ui.show_reflection_health(
@@ -370,6 +416,8 @@ class Level:
             self.ui.show_victory()
         elif self.game_over:
             self.ui.show_game_over()
+        elif self.map_open:
+            self.world_map.display(self.player, self.interaction_sprites)
         elif self.game_paused:
             self.upgrade.display()
         else:
@@ -381,3 +429,60 @@ class Level:
                 pos.y -= 12
 
                 self.ui.show_interaction(target.get_interaction_text(), pos)
+
+    def get_save_data(self):
+        player = self.player
+        chests = {}
+        treasures = {}
+        enemies = {}
+
+        for sprite in self.interaction_sprites:
+            key = f'{sprite.hitbox.centerx},{sprite.hitbox.centery}'
+
+            if isinstance(sprite, Chest):
+                chests[key] = sprite.state
+            elif isinstance(sprite, BuriedTreasure):
+                treasures[key] = sprite.state
+
+        for enemy in self.attackable_sprites:
+            if isinstance(enemy, Enemy):
+                enemies[enemy.save_id] = {
+                    'pos': list(enemy.hitbox.center),
+                    'health': enemy.health
+                }
+
+        return {
+            'version': 1,
+            'player': {
+                'pos': list(player.hitbox.center),
+                'health': player.health,
+                'energy': player.energy,
+                'exp': player.exp,
+                'stats': player.stats.copy(),
+                'upgrade_cost': player.upgrade_cost.copy(),
+                'inventory': player.inventory.copy(),
+                'weapon': player.weapon,
+                'magic': player.magic,
+                'facing': player.status.split('_')[0]
+            },
+            'chests': chests,
+            'treasures': treasures,
+            'enemies': enemies,
+            'explored': [list(tile) for tile in sorted(self.world_map.explored)],
+            'won': self.game_won
+        }
+
+    def save_game(self, notify=False):
+        if self.game_over or self.player.health <= 0 or self.active_chest is not None:
+            if notify:
+                self.ui.show_message('Save unavailable during duels or after death')
+            return False
+
+        saved = self.save_manager.save(self.get_save_data())
+
+        if notify or not saved:
+            self.ui.show_message(
+                'Progress saved.' if saved else 'Can not save'
+            )
+
+        return saved

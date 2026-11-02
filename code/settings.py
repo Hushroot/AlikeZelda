@@ -89,3 +89,21 @@ rarity_data = {
     'rare': {'weight': 25, 'multiplier': 1.5, 'color': '#5599ff'},
     'epic': {'weight': 5, 'multiplier': 2, 'color': '#bb66ff'}
 }
+
+treasure_data = {
+    'village': {
+        'clue_pos': (5, 5),
+        'treasure_pos': (9, 18),
+        'hint': 'Clue found: a cache waits in the grove south of the village'
+    },
+    'forest': {
+        'clue_pos': (31, 21),
+        'treasure_pos': (53, 9),
+        'hint': 'Clue found: search the clearing north of the forest road.'
+    },
+    'ruins': {
+        'clue_pos': (20, 29),
+        'treasure_pos': (27, 34),
+        'hint': 'Clue found: search the grass beside the southern ruins path.'
+    }
+}
